@@ -26,30 +26,6 @@ export type ResultPage<T> = {|
 |};
 
 /**
- * An interface to fetch Discord data
- */
-export interface DiscordFetcher {
-  channels(guildId: Snowflake): Promise<$ReadOnlyArray<Model.Channel>>;
-
-  members(
-    guildId: Snowflake,
-    after: Snowflake
-  ): Promise<ResultPage<Model.GuildMember>>;
-
-  messages(
-    channel: Snowflake,
-    after: Snowflake
-  ): Promise<ResultPage<Model.Message>>;
-
-  reactions(
-    channel: Snowflake,
-    message: Snowflake,
-    emoji: Model.Emoji,
-    after: Snowflake
-  ): Promise<ResultPage<Model.Reaction>>;
-}
-
-/**
  * Fetcher is responsible for:
  * - Returning the correct endpoint to fetch against for Guilds, Channels,
  *   Members, and Reactions.
@@ -67,7 +43,7 @@ export interface DiscordFetcher {
  *   returning an array of Channel objects in the corresponding method.
  *   See: https://discordapp.com/developers/docs/resources/guild#get-guild-channels
  */
-export class Fetcher implements DiscordFetcher {
+export class DiscordFetcher {
   +_fetch: FetchEndpoint;
   +_options: FetchOptions;
 
@@ -120,6 +96,16 @@ export class Fetcher implements DiscordFetcher {
     const {messagesLimit} = this._options;
     const endpoint = `/channels/${channel}/messages?after=${after}&limit=${messagesLimit}`;
     const response = await this._fetch(endpoint);
+
+    // {message: 'Missing Access', code: 50001}
+    // perhaps a permission issue?
+    if (response.code === 50001) {
+      return {
+        results: [],
+        pageInfo: {endCursor: null, hasNextPage: false},
+      };
+    }
+
     const results = response.map((x) => ({
       id: x.id,
       channelId: channel,
@@ -148,7 +134,7 @@ export class Fetcher implements DiscordFetcher {
     const endpoint = `/channels/${channel}/messages/${message}/reactions/${emojiRef}?after=${after}&limit=${reactionsLimit}`;
     const response = await this._fetch(endpoint);
     const results = response.map((x) => ({
-      emoji: x.emoji,
+      emoji: emoji,
       channelId: channel,
       messageId: message,
       authorId: x.id,
